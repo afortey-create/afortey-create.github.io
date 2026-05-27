@@ -268,7 +268,7 @@ textarea{resize:none;font-size:16px;}
           <li>Import PNG → print at 15 × 10 cm</li>
         </ol>
       </div>
-      <button class="btn btn-teal" id="btn-download" style="margin-bottom:7px;">⬇ Download label PNG</button>
+      <button class="btn btn-teal" id="btn-download" style="margin-bottom:7px;">📤 Share label to Labelife</button>
       <button class="btn btn-secondary" id="btn-new">＋ Add another item</button>
     </div>
   </div>
@@ -670,24 +670,31 @@ function downloadLabel(){
     ctx.fillStyle='#A8A59F';ctx.font='400 42px monospace';ctx.fillText('STOCK #'+S.sku,tx,H-72);
     const qc=document.querySelector('#qr-mini canvas');
     if(qc&&depUrl){try{ctx.drawImage(qc,W-240,H-240,190,190);}catch(e){}}
-    // iOS Safari share instead of download link
-    try {
-      canvas.toBlob(blob=>{
-        if(!blob)return;
-        const url=URL.createObjectURL(blob);
-        const a=document.createElement('a');
-        a.href=url;a.download=S.sku+'-label.png';
-        document.body.appendChild(a);a.click();
-        setTimeout(()=>{document.body.removeChild(a);URL.revokeObjectURL(url);},1000);
-      },'image/png');
-    } catch(e) {
-      const a=document.createElement('a');
-      a.href=canvas.toDataURL('image/png');
-      a.download=S.sku+'-label.png';
-      document.body.appendChild(a);a.click();
-      setTimeout(()=>document.body.removeChild(a),500);
-    }
-    showToast('Label ready — check your Downloads');
+    // Use Web Share API on iOS — opens share sheet so user can pick Labelife directly
+    canvas.toBlob(async blob=>{
+      if(!blob){showToast('Could not generate label');return;}
+      const filename = S.sku+'-label.png';
+      const file = new File([blob], filename, {type:'image/png'});
+      if(navigator.canShare && navigator.canShare({files:[file]})){
+        try{
+          await navigator.share({files:[file], title:'Label '+S.sku});
+          showToast('Label shared!');
+        } catch(e){
+          if(e.name!=='AbortError') fallbackDownload(blob, filename);
+        }
+      } else {
+        fallbackDownload(blob, filename);
+      }
+    },'image/png');
+  };
+  // helper — only reached on desktop or unsupported browsers
+  function fallbackDownload(blob, filename){
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    a.href=url;a.download=filename;
+    document.body.appendChild(a);a.click();
+    setTimeout(()=>{document.body.removeChild(a);URL.revokeObjectURL(url);},1000);
+    showToast('Label downloaded!');
   };
   if(S.photo){
     const img=new Image();
